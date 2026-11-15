@@ -1,5 +1,5 @@
 import sqlWasm from 'sql.js/dist/sql-wasm.wasm?url';
-import { analyse, runExport, zipFiles, manifestFor } from './engine.js';
+import { analyse, runExport, zipFiles, manifestFor, NeedsChoiceError, SameFileError, clearCache } from './engine.js';
 import { renderMarkdown } from './markdown.js';
 import { registerSW } from 'virtual:pwa-register';
 
@@ -10,23 +10,49 @@ const sqlOptions = { locateFile: () => sqlWasm };
 let analysis = null;
 let files = [];
 let busy = false;
+const roots = { project: undefined, baseline: undefined }; // chosen project folder when a zip holds several
 
 const fmtDur = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const fmtSize = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} kB`);
 const setStatus = (msg, error = false) => { const s = $('status'); s.textContent = msg; s.classList.toggle('error', error); };
 
+function offerChoice(err) {
+  const box = $('choose');
+  box.hidden = false;
+  box.innerHTML = '';
+  const h = document.createElement('p');
+  h.textContent = err.message;
+  box.append(h);
+  err.candidates.forEach((c) => {
+    const b = Object.assign(document.createElement('button'), { type: 'button', textContent: `${c.name}${c.prefix ? `  (${c.prefix})` : ''}` });
+    b.onclick = () => { roots[err.role === 'Project' ? 'project' : 'baseline'] = c.prefix; box.hidden = true; runAnalysis(); };
+    box.append(b);
+  });
+}
+
 async function runAnalysis() {
   const pf = $('project-file').files[0];
   if (!pf) return;
   $('project-name').textContent = `${pf.name} (${fmtSize(pf.size)})`;
-  const bf = $('baseline-file').files[0];
+  let bf = $('baseline-file').files[0];
   $('baseline-name').textContent = bf ? `${bf.name} (${fmtSize(bf.size)})` : 'No file chosen';
   for (const id of ['summary-card', 'export-card', 'results-card', 'manifest-card']) $(id).hidden = true;
+  $('choose').hidden = true;
   analysis = null;
   setStatus('Reading project…');
   try {
-    analysis = await analyse(pf, bf, { sqlOptions });
+    analysis = await analyse(pf, bf, { sqlOptions, root: roots.project, baselineRoot: roots.baseline });
   } catch (e) {
+    if (e instanceof NeedsChoiceError) { setStatus(''); offerChoice(e); return; }
+    if (e instanceof SameFileError) {
+      $('baseline-file').value = '';
+      $('baseline-name').textContent = 'No file chosen';
+      clearCache('baseline');
+      try { analysis = await analyse(pf, null, { sqlOptions, root: roots.project }); } catch (e2) { setStatus(e2.message, true); return; }
+      setStatus(e.message, true);
+      showSummary(analysis);
+      return;
+    }
     console.error(e);
     setStatus(e.message || 'Could not read that project.', true);
     return;
@@ -38,7 +64,7 @@ async function runAnalysis() {
 function showSummary(a) {
   const s = a.summary;
   const rows = [
-    ['Project', s.name], ['Tempo', `${s.tempo} bpm`], ['Length', `${s.bars} bars (${fmtDur(s.lengthSeconds)})`],
+    ['Project', s.name], ['Tempo', s.tempoText], ['Length', s.lengthText],
     ['Instruments', s.instruments], ['Colour groups', s.groups], ['Effects', s.effects], ['Buses', s.buses],
     ['Automation lanes', s.lanes], ['Stems', s.stems],
   ];
@@ -48,6 +74,9 @@ function showSummary(a) {
   $('stem-list').textContent = a.stems.map((x) => x.filename.replace(/\.wav$/, '')).join(' · ');
   $('midi-list').textContent = a.mixer.instruments.map((i) => i.name).join(' · ');
   $('o-stems').disabled = a.stems.length === 0 && a.allStems.length === 0;
+  if ($('o-stems').disabled) $('o-stems').checked = false;
+  $('o-midi').disabled = a.mixer.instruments.length === 0 || !a.summary.hasArrangement;
+  if ($('o-midi').disabled) $('o-midi').checked = false;
   $('summary-card').hidden = false;
   $('export-card').hidden = false;
   $('manifest').innerHTML = renderMarkdown(manifestFor(a));
@@ -74,7 +103,7 @@ function showResults() {
     const li = document.createElement('li');
     li.innerHTML = `<div class="meta"><div class="name"></div><div class="sub"></div></div><div class="btns"></div>`;
     li.querySelector('.name').textContent = f.name;
-    li.querySelector('.sub').textContent = `${f.folder} · ${fmtSize(f.size)}${f.shifted?.length ? ` · pitch-shifted: ${f.shifted.join(', ')}` : ''}${f.note ? ` · ${f.note}` : ''}`;
+    li.querySelector('.sub').textContent = `${f.folder || 'Manifest'} · ${fmtSize(f.size)}${f.shifted?.length ? ` · pitch-shifted: ${f.shifted.join(', ')}` : ''}${f.note ? ` · ${f.note}` : ''}`;
     const btns = li.querySelector('.btns');
     const dl = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Download' });
     dl.onclick = () => trigger(f.blob, f.name);
@@ -124,8 +153,9 @@ async function doZip() {
   $('zip-btn').disabled = true;
   $('zip-btn').textContent = 'Building zip…';
   try {
-    const blob = await zipFiles(files);
-    trigger(blob, `${analysis.summary.name} – Logic migration.zip`);
+    const root = `${analysis.summary.name} – Logic migration`;
+    const blob = await zipFiles(files, () => {}, root);
+    trigger(blob, `${root}.zip`);
   } catch (e) {
     setStatus(`Could not build the zip (${e.message}). Save the files one at a time instead.`, true);
   } finally {
@@ -140,4 +170,4 @@ $('export-btn').addEventListener('click', doExport);
 $('zip-btn').addEventListener('click', doZip);
 
 // Test hook: lets automated checks load fixtures without the file picker
-window.__loopy = { analyse: (p, b) => { const dt = new DataTransfer(); dt.items.add(p); $('project-file').files = dt.files; if (b) { const d2 = new DataTransfer(); d2.items.add(b); $('baseline-file').files = d2.files; } return runAnalysis(); } };
+window.__loopy = { reset: () => { roots.project = roots.baseline = undefined; clearCache(); }, analyse: (p, b) => { const dt = new DataTransfer(); dt.items.add(p); $('project-file').files = dt.files; if (b) { const d2 = new DataTransfer(); d2.items.add(b); $('baseline-file').files = d2.files; } return runAnalysis(); } };

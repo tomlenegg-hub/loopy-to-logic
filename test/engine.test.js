@@ -22,16 +22,19 @@ describe('engine on zipped fixtures', () => {
     const progress = [];
     const files = await runExport(a, { stems: true, midi: true, automation: true, manifest: true }, (p) => progress.push(p.fraction));
     expect(files.filter((f) => f.folder === 'MIDI')).toHaveLength(8);
-    expect(files.filter((f) => f.folder === 'Stems').map((f) => f.name).sort()).toEqual(['Lime – Bass2.wav', 'Violet – Bass2.wav', 'Yellow – Bass nofx.wav']);
+    expect(files.filter((f) => f.folder === 'Audio').map((f) => f.name).sort()).toEqual(['Lime – Bass2.wav', 'Violet – Bass2.wav', 'Yellow – Bass nofx.wav']);
     expect(files.find((f) => f.folder === 'Automation')).toBeTruthy();
     expect(progress.at(-1)).toBe(1);
     expect(progress.every((v, i) => i === 0 || v >= progress[i - 1] - 1e-9)).toBe(true);
-    const manifest = files.find((f) => f.folder === 'Manifest');
+    const manifest = files.find((f) => f.name.endsWith('effects manifest.md'));
     expect(await manifest.blob.text()).toContain('In the MIDI file');
-    const zip = await openZip(await zipFiles(files));
-    expect(zip.names).toContain('Stems/Yellow – Bass nofx.wav');
-    expect(zip.names).toContain('MIDI/J6 Synth One A.mid');
-    expect(zip.size('Stems/Yellow – Bass nofx.wav')).toBe(files.find((f) => f.name === 'Yellow – Bass nofx.wav').size);
+    const root = 'Adabadaba Dub – Logic migration';
+    const zip = await openZip(await zipFiles(files, () => {}, root));
+    expect(zip.names).toContain(`${root}/Audio/Yellow – Bass nofx.wav`);
+    expect(zip.names).toContain(`${root}/MIDI/J6 Synth One A.mid`);
+    expect(zip.names).toContain(`${root}/Adabadaba Dub – effects manifest.md`);
+    expect(zip.names).toContain(`${root}/Automation/Automation lanes.mid`);
+    expect(zip.size(`${root}/Audio/Yellow – Bass nofx.wav`)).toBe(files.find((f) => f.name === 'Yellow – Bass nofx.wav').size);
   }, 120000);
   it('can export MIDI only without touching audio', async () => {
     const files = await runExport(a, { midi: true }, () => {});

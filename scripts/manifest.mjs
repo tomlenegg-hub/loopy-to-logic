@@ -3,7 +3,7 @@ import { loadFixture, DUB, BASELINE, folderReader } from '../test/helpers.js';
 import { buildMixer } from '../src/lib/mixer.js'; import { findLanes, proposeTargets } from '../src/lib/automation.js';
 import { collectBaseline } from '../src/lib/baseline.js'; import { generateManifest } from '../src/lib/manifest.js';
 const j = (f) => JSON.parse(fs.readFileSync('data/'+f,'utf8'));
-const lookups = { numaSounds: j('numa-sounds.json'), turnado: j('turnado-subpresets.json') };
+const lookups = { numaSounds: j('numa-sounds.json'), turnado: j('turnado-subpresets.json'), internalSequencers: j('internal-sequencers.json') };
 const p = await loadFixture(DUB); const rd = folderReader(DUB);
 const mixer = buildMixer(p, rd, lookups);
 const targets = proposeTargets(findLanes(p, rd), mixer, j('automation-targets.json'));

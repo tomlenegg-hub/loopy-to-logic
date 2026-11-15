@@ -26,7 +26,8 @@ export function buildMixer(project, readResource, lookups = {}) {
 
   // Instrument names: letters appended when several share a module name, in mixer order
   const order = (pd.mixerChannelsOrder ?? []).map((r) => r._value);
-  const insts = project.refs(pd.audioSources).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  const hardware = project.refs(pd.audioSources).filter((o) => o.type !== 'PluginAudioSource');
+  const insts = project.refs(pd.audioSources).filter((o) => o.type === 'PluginAudioSource').sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   const byModule = new Map();
   for (const i of insts) byModule.set(pretty(i.data.moduleName), (byModule.get(pretty(i.data.moduleName)) ?? 0) + 1);
   const seen = new Map();
@@ -50,7 +51,7 @@ export function buildMixer(project, readResource, lookups = {}) {
     const label = byModule.get(mod) > 1 ? `${mod} ${letter(n)}` : mod;
     const groups = routes.get(inst.data.audioUnitIdentifier) ?? [];
     const midiTracks = groups.flatMap((g) => project.refs(g.data.tracks).filter((t) => t.data.type === 1).map((t) => ({
-      id: t.id, title: titleOf(t), pitch: t.data.pitch ?? 0, rate: t.data.rate ?? 1, intervals: mergeIntervals(trackPlacements(project, t)),
+      id: t.id, title: titleOf(t), pitch: t.data.pitch ?? 0, rate: t.data.rate ?? 1, speed: t.data.speed ?? 1, volume: t.data.volume ?? 1, intervals: mergeIntervals(trackPlacements(project, t)),
     })));
     const loops = midiTracks.map((t) => t.title);
     return {
@@ -62,6 +63,7 @@ export function buildMixer(project, readResource, lookups = {}) {
       midiLoops: loops,
       midiTracks,
       state: decodeInstrument(inst, readResource, lookups),
+      internal: internalSequencer(decodeInstrument(inst, readResource, lookups), mod, lookups),
     };
   });
 
@@ -82,13 +84,20 @@ export function buildMixer(project, readResource, lookups = {}) {
     id: mo.id, gain: mo.data.gain, gainDb: dB(mo.data.gain), effects: chain(project, mo.data),
   };
 
-  const tempo = project.all('Clock')[0]?.data;
-  return {
-    tempo: tempo?.tempo, beatsPerBar: tempo?.beatsPerBar ?? 4,
+  const clock = project.all('Clock')[0]?.data;
+  const trackTempo = project.all('Track').map((t) => t.data.tempo).find((v) => Number.isFinite(v) && v > 0);
+  const [tempo, tempoSource] = Number.isFinite(clock?.tempo) && clock.tempo > 0 ? [clock.tempo, 'clock']
+    : trackTempo ? [trackTempo, 'track'] : [120, 'default'];
+  const result = {
+    tempo, tempoSource, beatsPerBar: clock?.beatsPerBar ?? 4,
+    hardwareInputs: hardware.map((h) => ({ id: h.id, effects: chain(project, h.data), sends: sendsOf(h.data) })),
     instruments, groups: colourGroups, buses, master,
-    unusedTracks: colourGroups.flatMap((g) => g.tracks.filter((t) => !t.used && t.type === 'audio').map((t) => ({ ...t, colour: g.colour }))),
+    hasArrangement: colourGroups.some((g) => g.tracks.some((t) => t.used)) || project.all('Track').some((t) => trackPlacements(project, t).length > 0),
+    unusedTracks: [],
     superseded: findSuperseded(colourGroups, instruments),
   };
+  result.unusedTracks = result.hasArrangement ? colourGroups.flatMap((g) => g.tracks.filter((t) => !t.used && t.type === 'audio').map((t) => ({ ...t, colour: g.colour }))) : [];
+  return result;
 }
 
 export function mergeIntervals(pls) {
@@ -106,7 +115,7 @@ function describeGroup(project, g, sendsOf, titleOf) {
   const tracks = project.refs(g.data.tracks).map((t) => {
     const placements = trackPlacements(project, t);
     return {
-      id: t.id, title: titleOf(t), type: t.data.type === 1 ? 'midi' : 'audio', duration: t.data.duration,
+      id: t.id, title: titleOf(t), display: titleOf(t) ?? '(untitled loop)', type: t.data.type === 1 ? 'midi' : 'audio', duration: t.data.duration,
       pitch: t.data.pitch, volume: t.data.volume, placements: placements.length, intervals: mergeIntervals(placements),
       used: placements.length > 0,
     };
@@ -132,4 +141,14 @@ function findSuperseded(groups, instruments) {
     }
   }
   return out;
+}
+
+/** Flag instruments whose internal sequencer or arpeggiator is on (lookup: data/internal-sequencers.json). */
+function internalSequencer(state, module, lookups) {
+  const rule = lookups.internalSequencers?.[String(module).toLowerCase()];
+  if (!rule) return null;
+  const on = (k) => (state.params?.[k] ?? 0) > 0.5;
+  const active = Object.entries(rule.active ?? {}).filter(([k]) => on(k)).map(([, label]) => label);
+  const info = Object.entries(rule.info ?? {}).map(([k, label]) => ({ label, on: on(k) }));
+  return active.length ? { active, info, advice: rule.advice, label: rule.label } : null;
 }

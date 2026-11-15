@@ -1,0 +1,9 @@
+{
+  "_note": "Per plug-in (lower-case module name): parameters that switch an internal sequencer or arpeggiator on (these can stall when the host transport starts), and parameters worth reporting. Values above 0.5 count as on.",
+  "j6 synth one": {
+    "label": "J6's internal step sequencer / arpeggiator",
+    "active": { "seqEnable": "internal step sequencer", "arpEnable": "arpeggiator" },
+    "info": { "monoEnable": "mono mode", "isTempoSyncd": "tempo sync" },
+    "advice": "toggle J6's tempo sync button and start playback from bar 1"
+  }
+}

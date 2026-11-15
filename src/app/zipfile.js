@@ -62,11 +62,26 @@ export async function openZip(blob) {
   };
 }
 
-/** Find the .lpproj folder prefix (ignoring __MACOSX), e.g. "Adabadaba Dub.lpproj/". */
-export function findProjectRoot(names) {
-  const hit = names.find((n) => !n.startsWith('__MACOSX/') && /(^|\/)[^/]*\.lpproj\/Project\.sqlite$/.test(n));
-  if (!hit) return null;
-  const prefix = hit.slice(0, hit.length - 'Project.sqlite'.length);
-  const folder = prefix.replace(/\/$/, '').split('/').pop();
-  return { prefix, name: folder.replace(/\.lpproj$/, '') };
+/**
+ * Find every project in a zip: any `Project.sqlite` at any depth, whatever the folder is called (including the
+ * zip top level). __MACOSX entries and dot-files are ignored. `fallbackName` names a top-level project.
+ * Returns [{ prefix, name }], shallowest first.
+ */
+export function findProjects(names, fallbackName = 'Loopy project') {
+  const found = [];
+  for (const n of names) {
+    const parts = n.split('/');
+    if (parts.some((p) => p === '__MACOSX' || (p.startsWith('.') && p.length > 1))) continue;
+    if (parts.at(-1) !== 'Project.sqlite') continue;
+    const prefix = parts.slice(0, -1).join('/');
+    const folder = prefix ? parts.at(-2) : fallbackName;
+    found.push({ prefix: prefix ? `${prefix}/` : '', name: folder.replace(/\.lpproj$/i, '') || fallbackName });
+  }
+  return found.sort((a, b) => a.prefix.split('/').length - b.prefix.split('/').length || a.prefix.localeCompare(b.prefix));
+}
+
+/** Back-compat helper: the single project, or null. */
+export function findProjectRoot(names, fallbackName) {
+  const all = findProjects(names, fallbackName);
+  return all.length === 1 ? all[0] : all[0] ?? null;
 }

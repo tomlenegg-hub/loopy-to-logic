@@ -21,7 +21,7 @@ const noteOns = (trk) => trk.events.filter((e) => !e.meta && (e.bytes[0] & 0xf0)
 const noteOffs = (trk) => trk.events.filter((e) => !e.meta && (e.bytes[0] & 0xf0) === 0x80);
 
 describe('instrument MIDI files', () => {
-  const EXPECTED = { 'J6 Synth One A': 432, 'J6 Synth One B': 1050, 'J6 Synth One C': 2226, 'J6 Synth One D': 1054,
+  const EXPECTED = { 'J6 Synth One A': 432, 'J6 Synth One B': 1050, 'J6 Synth One C': 4453, 'J6 Synth One D': 2112,
     'Numa Player': 276, 'DigiStix A': 1242, 'DigiStix B': 91, 'DigiStix C': 160 };
   it('produces one file per instrument', () => expect(files.map((f) => f.name).sort()).toEqual(Object.keys(EXPECTED).sort()));
   for (const [name, count] of Object.entries(EXPECTED)) {
@@ -74,11 +74,10 @@ describe('automation MIDI file', () => {
   });
 });
 
-describe('MIDI loop pitch (canvas transpose)', () => {
+describe('MIDI loop pitch is not applied automatically', () => {
   const lowest = (name) => Math.min(...noteOns(readSmf(files.find((f) => f.name === name).bytes).tracks[1]).map((e) => e.bytes[1]));
-  it('J6 C and D (loop pitch +12) are transposed up an octave relative to J6 B (pitch 0)', () => {
-    // the same source loop feeds J6 B, C and D
-    expect(lowest('J6 Synth One C')).toBe(lowest('J6 Synth One B') + 12);
-    expect(lowest('J6 Synth One D')).toBe(lowest('J6 Synth One B') + 12);
+  it('J6 C and D (pitch +12, rate 2) keep the source notes – the manifest warns instead', () => {
+    expect(lowest('J6 Synth One C')).toBe(lowest('J6 Synth One B'));
+    expect(lowest('J6 Synth One D')).toBe(lowest('J6 Synth One B'));
   });
 });

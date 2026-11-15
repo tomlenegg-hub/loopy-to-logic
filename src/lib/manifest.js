@@ -1,21 +1,28 @@
 // Generate the effects manifest (Markdown, British English, en dashes only).
 import { effectChanges, instrumentChanges } from './baseline.js';
+import { fmtDb, isUnity, ccToGain } from './levels.js';
 
 const pct = (v) => `${Math.round(v * 100 + 1e-6)}%`;
 const n2 = (v) => (Math.round(v * 100) / 100).toString().replace('-', '−');
 const signed = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 100) / 100)}`;
-const levelText = (g, db) => (Math.abs(db) < 0.05 ? '' : ` Level ${signed(Math.round(db * 10) / 10)} dB.`);
+const levelText = (g) => (isUnity(g) ? '' : ` Level ${fmtDb(g)}.`);
 const busName = (l) => `**Bus ${l}**`;
 const camelWords = (k) => (/^[a-z]{2,5}$/.test(k) ? k : k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()).replace(/Lfo/g, 'LFO'));
 const sendText = (sends) => {
   if (!sends.length) return 'No sends.';
-  const nz = sends.filter((s) => s.amount > 0.0005);
-  const z = sends.filter((s) => s.amount <= 0.0005);
-  const parts = nz.map((s) => `${pct(s.amount)} to ${busName(s.bus)}`);
-  if (z.length) parts.push(`${nz.length ? 'and ' : ''}${z.map((s) => busName(s.bus)).join(', ')} at 0%`);
+  const nz = sends.filter((x) => x.amount > 0);
+  const z = sends.filter((x) => !(x.amount > 0));
+  const parts = nz.map((x) => `${fmtDb(x.amount)} to ${busName(x.bus)}`);
+  if (z.length) parts.push(`${nz.length ? 'and ' : ''}${z.map((x) => busName(x.bus)).join(', ')} off`);
   return `Sends ${parts.join(', ')}.`;
 };
-
+const trackLevel = (g) => (isUnity(g) ? '' : fmtDb(g));
+const rateWarning = (t) => {
+  const f = t.rate * t.speed;
+  const semis = Math.abs(Math.round(12 * Math.log2(f)));
+  const speedNote = t.speed !== 1 ? ` (rate ${t.rate}, speed ${t.speed})` : '';
+  return `Loopy plays this loop at ${Number.isInteger(f) ? f : f.toFixed(2)}× rate${speedNote}, so the MIDI file is already sped up to match. If it sounds ${semis ? 'an octave' : 'in a different register'} too high or low compared with Loopy, set Transpose to −${semis || 12} or +${semis || 12} in the Region inspector.`;
+};
 function formatChange(effect, c, opts) {
   const { odc } = opts;
   const t = effect.title;
@@ -91,7 +98,14 @@ export function generateManifest(ctx) {
     push(`### ${heading}`);
     const loops = i.midiLoops.filter(Boolean);
     const played = loops.length ? `Played by MIDI loop **${loops[0]}**` : i.midiTracks.length ? 'Played by an untitled MIDI loop' : 'No MIDI loop assigned';
-    push(`${played}${i.sourceGroups.length ? ` (group ${i.sourceGroups[0]})` : ''}. ${i.effects.length ? '' : 'No insert effects. '}${sendText(i.sends)}${levelText(i.gain, i.gainDb)}`, '');
+    push(`${played}${i.sourceGroups.length ? ` (group ${i.sourceGroups[0]})` : ''}. ${i.effects.length ? '' : 'No insert effects. '}${sendText(i.sends)}${levelText(i.gain)}`, '');
+    const loopVol = i.midiTracks.filter((t) => !isUnity(t.volume));
+    if (loopVol.length) push(`Loop volume in Loopy: ${loopVol.map((t) => `${t.title ?? 'untitled'} ${fmtDb(t.volume)}`).join('; ')} (not applied to the MIDI file).`, '');
+    i.midiTracks.filter((t) => t.rate !== 1 || t.speed !== 1).forEach((t) => push(`> **Rate** – ${rateWarning(t)}`, ''));
+    if (i.internal) {
+      const on = i.internal.info.map((x) => `${x.label} ${x.on ? 'on' : 'off'}`).join(', ');
+      push(`> **Internal sequencer** – ${i.internal.label}: ${i.internal.active.join(' and ')} on (${on}). This preset uses it. If it stalls in Logic, ${i.internal.advice}.`, '');
+    }
     if (i.effects.length) {
       push('| Slot | Plug-in | Preset | Position |', '|---|---|---|---|');
       i.effects.forEach((e, k) => push(`| ${k + 1} | ${e.title} | ${e.preset ?? (tweaked(e) ? '– (tweaked)' : '–')} | ${e.position} |`));
@@ -108,9 +122,9 @@ export function generateManifest(ctx) {
     const sup = mixer.superseded.filter((s) => s.colour === g.colour && audio.some((t) => t.title === s.track));
     const unused = audio.every((t) => !t.used);
     push(`### ${g.label} – ${g.colour} colour (group ${g.id})`);
-    const names = audio.map((t) => `**${t.title}**`).join(' and ');
+    const names = audio.map((t) => `**${t.display}**`).join(' and ');
     const pitch = audio.filter((t) => t.pitch).map((t) => `${t.title} ${t.pitch > 0 ? '+' : ''}${t.pitch} semitones`);
-    push(`Contains ${audio.length > 1 ? `${audio.length} loops: ` : 'loop '}${names}. ${g.effects.length ? '' : 'No insert effects. '}${sendText(g.sends)} Volume ${g.volume > 1.001 ? `${signed(Math.round(g.volumeDb * 10) / 10)} dB` : pct(g.volume)}.${pitch.length ? ` Pitch shift: ${pitch.join('; ')}.` : ''}`);
+    push(`Contains ${audio.length > 1 ? `${audio.length} loops: ` : 'loop '}${names}. ${g.effects.length ? '' : 'No insert effects. '}${sendText(g.sends)} Volume ${fmtDb(g.volume)}.${audio.filter((t) => !isUnity(t.volume)).map((t) => ` Loop volume: ${t.display} ${fmtDb(t.volume)}.`).join('')}${pitch.length ? ` Pitch shift: ${pitch.join('; ')}.` : ''}`);
     if (unused) push('', '> **Unused** – this loop is not placed in the arrangement.');
     if (sup.length) push('', `> **Superseded** – same arrangement positions as ${sup[0].replacedBy} (MIDI loop ${sup[0].midiLoop}); the audio loop has probably been replaced by MIDI. Excluded from stems by default.`);
     push('');
@@ -127,8 +141,8 @@ export function generateManifest(ctx) {
     '| Bus | Effect | Preset | Position | Fed by | Notes |', '|---|---|---|---|---|---|');
   const feeders = (letter) => {
     const out = [];
-    mixer.instruments.forEach((i) => i.sends.filter((s) => s.bus === letter).forEach((s) => out.push(`${i.name} (${pct(s.amount)})`)));
-    mixer.groups.forEach((g) => g.sends.filter((s) => s.bus === letter).forEach((s) => out.push(`${g.label} (${pct(s.amount)})`)));
+    mixer.instruments.forEach((i) => i.sends.filter((s) => s.bus === letter).forEach((s) => out.push(`${i.name} (${fmtDb(s.amount)})`)));
+    mixer.groups.forEach((g) => g.sends.filter((s) => s.bus === letter).forEach((s) => out.push(`${g.label} (${fmtDb(s.amount)})`)));
     return out.join(', ') || '–';
   };
   for (const b of mixer.buses) {
@@ -137,16 +151,17 @@ export function generateManifest(ctx) {
     const note = t ? `${t.lane.title.replace(/ Automation$/, '')} automation (${t.status})` : '';
     push(`| ${b.letter} | ${e?.title ?? '–'} | ${e ? (/Turnado/i.test(e.title) ? 'see section 6' : presetLabel(e)) : '–'} | ${e?.position ?? '–'} | ${feeders(b.letter)} | ${note} |`);
   }
-  const loud = mixer.buses.filter((b) => Math.abs(b.gainDb) > 0.05);
-  push('', loud.length ? `${loud.map((b) => `Bus ${b.letter}'s output level is ${signed(b.gainDb)} dB`).join('; ')}; all other buses are at 0 dB.` : 'All buses are at 0 dB.', '', '---', '');
+  const loud = mixer.buses.filter((b) => !isUnity(b.gain));
+  push('', loud.length ? `${loud.map((b) => `Bus ${b.letter}'s output level is ${fmtDb(b.gain)}`).join('; ')}; all other buses are at 0.0 dB.` : 'All buses are at 0.0 dB.', '', '---', '');
 
   // 5 Master
   push('## 5. Master output', '', '| Slot | Plug-in | Preset | Position |', '|---|---|---|---|');
   mixer.master.effects.forEach((e, k) => push(`| ${k + 1} | ${e.title} | ${e.preset ?? (tweaked(e) ? '– (tweaked)' : '–')} | ${e.position} |`));
   push('');
-  if (Math.abs(mixer.master.gainDb) > 0.05 && mixer.master.effects.some((e) => e.position === 'Post')) {
+  push(`Master fader: ${fmtDb(mixer.master.gain)}.`, '');
+  if (!isUnity(mixer.master.gain) && mixer.master.effects.some((e) => e.position === 'Post')) {
     const post = mixer.master.effects.find((e) => e.position === 'Post');
-    push(`The master fader is at ${signed(mixer.master.gainDb)} dB (gain ${mixer.master.gain.toFixed(3)}) and ${post.title} sits after it. Logic has no post-fader inserts, so put a **Gain** plug-in set to ${signed(mixer.master.gainDb)} dB before ${post.title}.`, '');
+    push(`${post.title} sits after the master fader. Logic has no post-fader inserts, so put a **Gain** plug-in set to ${fmtDb(mixer.master.gain)} before ${post.title}.`, '');
   }
   push('---', '');
 
@@ -168,11 +183,12 @@ export function generateManifest(ctx) {
   // 7 Automation
   push('## 7. Automation lanes and what they probably drive', '',
     'Each lane is a long MIDI loop sending a single controller (CC0) into Loopy, where it moves an on-screen slider. Loopy does not store which control each slider is bound to, so targets are proposed from the project data (a final value matching a saved send level) or taken from your confirmed list.', '',
+    '**Level conversion:** a CC value n sets a linear gain of n/128 (for example 38 → 0.297 = −10.5 dB; 0 = off). The MIDI file keeps the raw CC values; convert to dB when drawing send automation in Logic.', '',
     automationMapping ? '| Automation lane | Final value | Probable target | Status | In the MIDI file |' : '| Automation lane | Final value | Probable target | Status |', automationMapping ? '|---|---|---|---|---|' : '|---|---|---|---|');
   for (const t of targets) {
     const tgt = t.target ? `Send level, ${t.target.source} → Bus ${t.target.bus}` : t.candidates?.length ? `One of: ${t.candidates.map((c) => `${c.source} → Bus ${c.bus}`).join('; ')}` : 'Unknown';
     const mp = automationMapping?.find((m) => m.lane === t.lane.title);
-    push(`| ${t.lane.title} | ${t.lane.finalValue} of 127 | ${tgt} | ${t.status === 'to confirm' ? 'to confirm' : `**${t.status}**`} |${mp ? ` CC${mp.cc}, channel ${mp.channel} |` : ''}`);
+    push(`| ${t.lane.title} | ${t.lane.finalValue} of 127 (${t.lane.finalValue === 0 ? 'off' : fmtDb(ccToGain(t.lane.finalValue))}) | ${tgt} | ${t.status === 'to confirm' ? 'to confirm' : `**${t.status}**`} |${mp ? ` CC${mp.cc}, channel ${mp.channel} |` : ''}`);
   }
   push('', 'In Logic these become send-level automation on the source track.', '', '---', '');
 
@@ -216,14 +232,28 @@ export function generateManifest(ctx) {
     push('', '---', '');
   }
 
-  // 10 Warnings
-  push(`## ${hasBaseline ? 10 : 9}. To confirm`, '');
+  // 10 Importing into Logic
+  const n = hasBaseline ? 10 : 9;
+  push(`## ${n}. Importing into Logic (iPad)`, '',
+    'On the iPad every import into Logic goes through the Files app, so set up a split screen first:', '',
+    '1. Turn on **Windowed Apps** or **Stage Manager** (Settings → Multitasking & Gestures).',
+    '2. Open **Logic Pro** and the **Files** app side by side, and open the exported folder in Files.',
+    '3. Select several files at once (tap **Select**, or press and hold one and tap the others) and drag them into Logic.',
+    '4. Drop each file onto its own track at **bar 1**: `MIDI/` files onto the instrument tracks, `Audio/` files onto audio tracks, and `Automation/` onto a spare track to read the lanes.',
+    '5. Check the levels and effects against the sections above, and set the colour-group faders, send levels and bus levels in dB.', '',
+    '---', '');
+
+  // 11 To confirm
+  push(`## ${n + 1}. To confirm`, '');
   const todo = [];
   targets.filter((t) => t.status === 'to confirm').forEach((t) => todo.push(`Automation lane "${t.lane.title}" – target not determined.`));
   mixer.instruments.filter((i) => i.state.note).forEach((i) => todo.push(`${i.name}: ${i.state.note}.`));
   turnados.forEach(({ e }) => e.turnado.strings.slice(0, 8).filter((s) => !lookups.turnado?.[s.text]).forEach((s) => todo.push(`Turnado sub-preset "${s.text}" – effect family unknown.`)));
-  mixer.unusedTracks.forEach((t) => todo.push(`${t.title} (${t.colour}) is not used in the arrangement.`));
-  push(todo.length ? todo.map((t) => `- ${t}`).join('\n') : 'Nothing – every channel, effect, preset, tweak, send and automation target is accounted for.', '');
+  mixer.unusedTracks.forEach((t) => todo.push(`${t.display} (${t.colour}) is not used in the arrangement.`));
+  push(todo.length ? todo.map((t) => `- ${t}`).join('\n') : 'Nothing in the project data is unresolved.', '');
+  push('**Still to confirm by ear**', '',
+    '- **Segment offset direction.** MIDI and audio segments carry an offset; its direction is unconfirmed and shifts channels that use one (for example J6 Synth One B and Keys) by up to about half a beat. If a part feels early or late against the stems, nudge the region.',
+    '- **MIDI loops with a rate other than 1.** Whether Loopy also transposes such a loop is unconfirmed. The MIDI is not transposed; use the Region inspector\'s Transpose if it sounds an octave out.', '');
 
   return L.join('\n').replace(/\n{3,}/g, '\n\n');
 }

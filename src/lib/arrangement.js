@@ -24,9 +24,24 @@ export function trackMidi(project, trackObj, readResource) {
   return { seg, events: parseLoopyMidi(bytes) };
 }
 
-/** One entry per (MIDI-fed) plug-in instrument, with its arranged events. */
-/** applyPitch: Loopy transposes a MIDI loop by its canvas pitch setting (Track.pitch, semitones). */
-export function midiChannels(project, readResource, { offsetSign = -1, applyPitch = true } = {}) {
+/**
+ * Playback-speed factor of a loop. Loopy's `rate` ("Rate (Variable Pitch)") plays a loop faster or slower and
+ * `speed` is its time-stretch control; for MIDI loops both change how fast the notes play, so the factors multiply.
+ * `pitch` is NOT applied here: whether Loopy also transposes a MIDI loop when rate is not 1 is unconfirmed,
+ * so it is reported as a manifest warning instead.
+ */
+export const loopFactor = (track) => {
+  const f = (Number.isFinite(track.data.rate) && track.data.rate > 0 ? track.data.rate : 1)
+    * (Number.isFinite(track.data.speed) && track.data.speed > 0 ? track.data.speed : 1);
+  return f;
+};
+
+/**
+ * One entry per (MIDI-fed) plug-in instrument, with its arranged events.
+ * Effective loop length = duration / factor; every note time and duration is divided by the factor.
+ * applyPitch (default false) transposes notes by Track.pitch semitones.
+ */
+export function midiChannels(project, readResource, { offsetSign = -1, applyPitch = false } = {}) {
   const instByUid = new Map(project.all('PluginAudioSource').map((o) => [o.data.audioUnitIdentifier, o]));
   const out = [];
   for (const src of project.all('GroupMIDISource')) {
@@ -40,12 +55,14 @@ export function midiChannels(project, readResource, { offsetSign = -1, applyPitc
         if (t.data.type !== 1) continue;
         const m = trackMidi(project, t, readResource);
         if (!m) continue;
-        const L = t.data.duration;
+        const factor = loopFactor(t);
+        const L = t.data.duration / factor;
+        const scaled = factor === 1 ? m.events : m.events.map((e) => ({ ...e, time: e.time / factor, ...(e.kind === 'note' ? { duration: e.duration / factor } : {}) }));
         const placements = trackPlacements(project, t);
         const transpose = applyPitch ? Math.round(t.data.pitch ?? 0) : 0;
-        const events = expandEvents(m.events, placements, L, m.seg.offset ?? 0, offsetSign).map((e) =>
+        const events = expandEvents(scaled, placements, L, (m.seg.offset ?? 0) / factor, offsetSign).map((e) =>
           e.kind === 'note' && transpose ? { ...e, note: Math.max(0, Math.min(127, e.note + transpose)) } : e);
-        tracks.push({ track: t, placements, events, transpose });
+        tracks.push({ track: t, placements, events, transpose, factor });
       }
       out.push({ instrument: inst, group, tracks, events: tracks.flatMap((t) => t.events).sort((a, b) => a.time - b.time) });
     }

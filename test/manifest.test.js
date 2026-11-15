@@ -54,10 +54,11 @@ describe('manifest text (acceptance)', () => {
   const has = (s) => expect(md).toContain(s);
   it('counts 23 effect instances', () => has('23 effect instances in total.'));
   it('uses en dashes and never em dashes', () => expect(md).not.toContain('—'));
-  it('Bus G is +4 dB, others 0 dB', () => has("Bus G's output level is +4 dB; all other buses are at 0 dB."));
+  it('Bus G is +4.0 dB, others 0.0 dB', () => has("Bus G's output level is +4.0 dB; all other buses are at 0.0 dB."));
   it('master chain and gain note', () => {
     has('| 2 | RoughRider3 | 03 – Just A Bit Off The Top | Post |');
-    has('−9.5 dB');
+    has('Master fader: −9.5 dB.');
+    has('Gain** plug-in set to −9.5 dB before RoughRider3');
   });
   it('Bus A ODC tweaks', () => {
     has('Mix: 50% → 89%');
@@ -68,7 +69,7 @@ describe('manifest text (acceptance)', () => {
     has('| 1 | Ventilator | Pitch Looper | 101 of 127 |');
     has('Knob 1 set to 101 (of 127)');
   });
-  it('Bass nofx sends 30% to D, 0% to E', () => has('Sends 30% to **Bus D**, and **Bus E** at 0%.'));
+  it('Bass nofx sends −10.5 dB to D, off to E', () => has('Sends −10.5 dB to **Bus D**, and **Bus E** off.'));
   it('flags tweaks to an unselected algorithm as no effect', () => has('no effect with the selected algorithm'));
   it('lists Bass main as unused', () => has('this loop is not placed in the arrangement'));
 });

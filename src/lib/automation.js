@@ -2,6 +2,7 @@
 import { trackMidi, trackPlacements } from './arrangement.js';
 import { expandEvents } from './midi.js';
 import { tidyName } from './effects.js';
+import { ccToGain } from './levels.js';
 
 export const LANE_MIN_BEATS = 100;
 
@@ -45,10 +46,10 @@ export function proposeTargets(lanes, mixer, known = {}) {
   return lanes.map((lane) => {
     const k = known[lane.title];
     if (k) return { lane, status: 'confirmed', target: k };
-    const v = lane.finalValue == null ? null : lane.finalValue / 127;
-    const matches = v == null ? [] : sends.filter((s) => Math.abs(s.amount - v) < 0.5 / 127);
+    const v = lane.finalValue == null ? null : ccToGain(lane.finalValue);
+    const matches = v == null ? [] : sends.filter((s) => Math.abs(s.amount - v) < 0.5 / 128);
     const nonZero = matches.filter((s) => s.amount > 0);
-    if (nonZero.length === 1) return { lane, status: 'proposed', target: { source: nonZero[0].owner, bus: nonZero[0].bus }, reason: `final value ${lane.finalValue} matches saved send` };
+    if (nonZero.length === 1) return { lane, status: 'proposed', target: { source: nonZero[0].owner, bus: nonZero[0].bus }, reason: `final value ${lane.finalValue} (gain ${v.toFixed(4)}) matches saved send` };
     return { lane, status: 'to confirm', candidates: matches.map((s) => ({ source: s.owner, bus: s.bus })) };
   });
 }
