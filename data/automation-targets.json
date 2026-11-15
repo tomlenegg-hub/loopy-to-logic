@@ -1,0 +1,8 @@
+{
+  "_note": "User-confirmed automation targets, keyed by lane title. 'source' uses the manifest's channel names.",
+  "Snare Reverb Automation": { "source": "DigiStix B", "bus": "B" },
+  "Snare Delay #1 Automation": { "source": "DigiStix B", "bus": "A" },
+  "Snare Delay #2 Automation": { "source": "DigiStix B", "bus": "G" },
+  "Bass Distortion Automation": { "source": "Bass nofx", "bus": "D" },
+  "Bass Turnado Automation": { "source": "Bass nofx", "bus": "E" }
+}

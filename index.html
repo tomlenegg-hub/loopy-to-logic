@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Loopy to Logic</title>
+  <meta name="description" content="Migrate a Loopy Pro project to Logic Pro for iPad: stems, MIDI, automation and an effects manifest. Everything runs on your device.">
+  <meta name="theme-color" content="#12343b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Loopy to Logic">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./src/app/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Loopy to Logic</h1>
+      <p class="lede">Move a Loopy Pro project into Logic Pro for iPad. Everything is processed on this device – nothing is uploaded.</p>
+    </header>
+
+    <section class="card" aria-labelledby="s1">
+      <h2 id="s1"><span class="n">1</span> Choose your project</h2>
+      <label class="picker">
+        <span class="picker-label">Loopy project <em>(zipped .lpproj – required)</em></span>
+        <input id="project-file" type="file" accept=".zip,application/zip">
+        <span id="project-name" class="picker-name">No file chosen</span>
+      </label>
+      <label class="picker">
+        <span class="picker-label">Baseline project <em>(optional – one untouched instance of each preset, for “tweaks from preset”)</em></span>
+        <input id="baseline-file" type="file" accept=".zip,application/zip">
+        <span id="baseline-name" class="picker-name">No file chosen</span>
+      </label>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="summary-card" class="card" hidden aria-labelledby="s2">
+      <h2 id="s2"><span class="n">2</span> What was found</h2>
+      <dl id="summary" class="stats"></dl>
+      <div id="warnings"></div>
+    </section>
+
+    <section id="export-card" class="card" hidden aria-labelledby="s3">
+      <h2 id="s3"><span class="n">3</span> Export</h2>
+      <fieldset>
+        <legend class="sr-only">Outputs</legend>
+        <label class="check"><input type="checkbox" id="o-stems" checked> <span><strong>Audio stems</strong> – 24-bit WAV per colour, from bar 1<small id="stem-list"></small></span></label>
+        <label class="check"><input type="checkbox" id="o-midi" checked> <span><strong>Instrument MIDI</strong> – one file per instrument<small id="midi-list"></small></span></label>
+        <label class="check"><input type="checkbox" id="o-auto" checked> <span><strong>Automation MIDI</strong> – lanes as CC curves (CC20 upwards)</span></label>
+        <label class="check"><input type="checkbox" id="o-manifest" checked> <span><strong>Manifest</strong> – effects, presets, sends and tweaks (Markdown)</span></label>
+      </fieldset>
+      <details>
+        <summary>More options</summary>
+        <label class="check"><input type="checkbox" id="o-superseded"> <span>Include audio loops replaced by MIDI</span></label>
+        <label class="check"><input type="checkbox" id="o-unused"> <span>Include loops not used in the arrangement</span></label>
+      </details>
+      <button id="export-btn" class="primary" type="button">Export</button>
+      <div id="progress" hidden>
+        <progress id="bar" max="1" value="0"></progress>
+        <p id="progress-label" class="status"></p>
+      </div>
+    </section>
+
+    <section id="results-card" class="card" hidden aria-labelledby="s4">
+      <h2 id="s4"><span class="n">4</span> Downloads</h2>
+      <div class="actions">
+        <button id="zip-btn" class="primary" type="button">Download everything as one zip</button>
+      </div>
+      <p class="hint">On iPad, large stems can fail inside a single zip. If that happens, save the files one at a time below. “Share / Save to Files” opens the share sheet.</p>
+      <ul id="files" class="files"></ul>
+    </section>
+
+    <section id="manifest-card" class="card" hidden aria-labelledby="s5">
+      <h2 id="s5">Manifest</h2>
+      <article id="manifest" class="manifest"></article>
+    </section>
+
+    <footer>
+      <p>Works offline once loaded. Pitch shifting uses SoundTouch (LGPL-2.1).</p>
+    </footer>
+  </main>
+  <script type="module" src="./src/app/main.js"></script>
+</body>
+</html>

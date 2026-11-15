@@ -1,0 +1,12 @@
+import fs from 'fs';
+import { loadFixture, DUB, BASELINE, folderReader } from '../test/helpers.js';
+import { buildMixer } from '../src/lib/mixer.js'; import { findLanes, proposeTargets } from '../src/lib/automation.js';
+import { collectBaseline } from '../src/lib/baseline.js'; import { generateManifest } from '../src/lib/manifest.js';
+const j = (f) => JSON.parse(fs.readFileSync('data/'+f,'utf8'));
+const lookups = { numaSounds: j('numa-sounds.json'), turnado: j('turnado-subpresets.json') };
+const p = await loadFixture(DUB); const rd = folderReader(DUB);
+const mixer = buildMixer(p, rd, lookups);
+const targets = proposeTargets(findLanes(p, rd), mixer, j('automation-targets.json'));
+const baseline = collectBaseline(await loadFixture(BASELINE), folderReader(BASELINE), lookups);
+const md = generateManifest({ mixer, lanes: [], targets, baseline, lookups, odc: j('odc-params.json'), projectName: 'Adabadaba Dub', baselineName: 'Logic Migration Project.lpproj' });
+fs.writeFileSync(process.argv[2] ?? 'out-manifest.md', md); console.log(md.length, 'chars');

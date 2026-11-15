@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# Test fixtures contain real Loopy projects and audio – keep them out of a public repository.
+# Put your own in fixtures/ (see README) to run the acceptance tests locally.
+fixtures/
+examples/
+scripts/scratch/

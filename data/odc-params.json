@@ -1,0 +1,13 @@
+{
+  "_note": "Other Desert Cities parameter names, index = Parameters key. Rest to be added (baseline has 109 parameters).",
+  "names": [
+    "Time 1", "Time 2", "Regen", "Mix", "Sync 1", "Sync 2", "Loop", "Algorithm",
+    "Algo01: Low Cut", "Algo01: High Cut", "Algo01: Saturation", "Algo01: Spread", "Algo01: Crossfeed",
+    "Algo02: Low Cut", "Algo02: High Cut", "Algo02: Smoothing", "Algo02: Crossfeed", "Algo02: Reflect",
+    "Algo03: Speed 1", "Algo03: Speed 2", "Algo03: Color", "Algo03: Random", "Algo03: Smoothing",
+    "Algo03: Crossfeed", "Algo03: Regen Pre", "Algo03: Quantize",
+    "Algo04: # Taps 1", "Algo04: # Taps 2", "Algo04: Spread", "Algo04: Low Cut", "Algo04: High Cut",
+    "Algo04: Crossfeed", "Algo04: Dly 1 Tap 1", "Algo04: Dly 2 Tap 1"
+  ],
+  "switches": ["Sync 1", "Sync 2", "Loop", "Algorithm", "Algo03: Quantize", "Algo04: # Taps 1", "Algo04: # Taps 2"]
+}
