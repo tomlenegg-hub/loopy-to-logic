@@ -132,3 +132,10 @@ describe('items 3 and 4: no arrangement, counts', () => {
     expect(base.proj.project.all('Effect')).toHaveLength(14);
   });
 });
+
+describe('choosing this tool’s own export by mistake', () => {
+  it('gives a clear message', async () => {
+    const f = makeZip({ 'Song/MIDI/A.mid': tiny, 'Song/Manifest/m.md': tiny, 'Song/Stems/a.wav': tiny });
+    await expect(openProjectZip(f)).rejects.toThrow(/output of this tool/);
+  });
+});

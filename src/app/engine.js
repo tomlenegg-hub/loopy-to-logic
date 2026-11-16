@@ -56,6 +56,8 @@ export async function openProjectZip(file, { sqlOptions, root: chosenRoot, role 
     const fallback = (file.name ?? '').replace(/\.zip$/i, '') || 'Loopy project';
     const found = findProjects(zip.names, fallback);
     if (!found.length) {
+      const own = zip.names.some((n) => /(^|\/)(MIDI|Automation)\/.+\.mid$/.test(n)) && zip.names.some((n) => /(^|\/)Manifest\//.test(n));
+      if (own) throw new Error('This zip is the output of this tool (MIDI, Stems and Manifest folders), not a Loopy project. Choose the zipped .lpproj folder exported from Loopy Pro, which contains Project.sqlite.');
       const shown = zip.names.slice(0, 20).join('\n  ');
       throw new Error(`No Loopy project found (no Project.sqlite anywhere in the zip). First ${Math.min(20, zip.names.length)} of ${zip.names.length} entries:\n  ${shown}`);
     }
