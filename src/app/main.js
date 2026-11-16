@@ -171,3 +171,5 @@ $('zip-btn').addEventListener('click', doZip);
 
 // Test hook: lets automated checks load fixtures without the file picker
 window.__loopy = { reset: () => { roots.project = roots.baseline = undefined; clearCache(); }, analyse: (p, b) => { const dt = new DataTransfer(); dt.items.add(p); $('project-file').files = dt.files; if (b) { const d2 = new DataTransfer(); d2.items.add(b); $('baseline-file').files = d2.files; } return runAnalysis(); } };
+
+{ const b = document.getElementById('build'); if (b) b.textContent = 'Build ' + (typeof __BUILD__ === 'undefined' ? 'dev' : __BUILD__); }

@@ -1,7 +1,12 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+
+const sha = (() => { try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; } })();
+const stamp = `v1.1 – ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC – ${sha}`;
 
 export default defineConfig({
+  define: { __BUILD__: JSON.stringify(stamp) },
   base: './', // works on GitHub Pages under any repository name
   plugins: [
     VitePWA({
